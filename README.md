@@ -237,29 +237,32 @@ debug or extend any part of this code in the follow-up discussion.
 
 ## Project layout
 
+
+```
 ticket-system/
 ├── backend/
-│ ├── config/ # settings, urls, wsgi
-│ ├── tickets/
-│ │ ├── models.py # Department, Office, Floor, Person, IssueType, TicketSequence, Ticket, Activity
-│ │ ├── serializers.py # list / detail / create serializers + validation
-│ │ ├── views.py # TicketViewSet with workflow actions, filtering, bootstrap
-│ │ ├── pagination.py # 10 per page
-│ │ ├── migrations/ # 0001 initial → 0004 (issue_no counter, priority workflow rework)
-│ │ ├── tests.py # 17 tests
-│ │ └── management/commands/seed_data.py
-│ ├── manage.py
-│ └── requirements.txt
+│   ├── config/              # settings, urls, wsgi
+│   ├── tickets/
+│   │   ├── models.py        # Department, Office, Floor, Person, IssueType, Ticket, Activity
+│   │   ├── serializers.py   # list / detail / create serializers + validation
+│   │   ├── views.py         # TicketViewSet with workflow actions, filtering, bootstrap
+│   │   ├── pagination.py    # 10 per page
+│   │   ├── tests.py         # 15 tests
+│   │   └── management/commands/seed_data.py
+│   ├── manage.py
+│   └── requirements.txt
 ├── frontend/
-│ ├── src/
-│ │ ├── api/client.js # fetch wrapper + error flattening
-│ │ ├── context/AppContext.jsx
-│ │ ├── components/ # StatusChip, PriorityChip, PersonBadge, StateView,
-│ │ │ # TicketCard, FiltersBar, CreateTicketDialog,
-│ │ │ # ActivityFeed, CtaPanel
-│ │ ├── pages/ # TicketListPage, TicketDetailPage
-│ │ └── tests/ # 10 tests
-│ ├── package.json
-│ └── vite.config.js
+│   ├── src/
+│   │   ├── api/client.js        # fetch wrapper + error flattening
+│   │   ├── context/AppContext.jsx
+│   │   ├── components/          # StatusChip, PriorityChip, PersonBadge, StateView,
+│   │   │                        # TicketCard, FiltersBar, CreateTicketDialog,
+│   │   │                        # ActivityFeed, CtaPanel
+│   │   ├── pages/               # TicketListPage, TicketDetailPage
+│   │   └── tests/               # 10 tests
+│   ├── package.json
+│   └── vite.config.js
 ├── setup.sh / setup.bat / run-backend.sh / run-frontend.sh
 └── README.md
+```
+ 
