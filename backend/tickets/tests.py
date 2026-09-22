@@ -32,6 +32,9 @@ class BaseSetup(TestCase):
         self.dept_poc = Person.objects.create(
             name="Dhananjaya Murthy", role=Role.DEPARTMENT_POC, department=self.maintenance
         )
+        self.other_dept_poc = Person.objects.create(
+            name="Vikram Shah", role=Role.DEPARTMENT_POC, department=self.it
+        )
         self.tech = Person.objects.create(
             name="Prakash Kumar", role=Role.TECHNICIAN, department=self.maintenance
         )
@@ -56,16 +59,18 @@ class BaseSetup(TestCase):
 
 
 class TicketCreationTests(BaseSetup):
-    def test_create_ticket_returns_201_and_auto_assigns_department_poc(self):
+    def test_create_ticket_returns_201_with_no_priority_or_specific_poc_yet(self):
         response = self.create_ticket()
         self.assertEqual(response.status_code, 201)
         ticket = Ticket.objects.get(pk=response.data["id"])
-        # Priority and department are derived server-side from the selected issues.
-        self.assertEqual(ticket.priority, Priority.HIGH)
+        # Department is derived server-side from the selected issues, but priority
+        # is left for the Department POC to decide, and no specific person is
+        # pre-assigned — the ticket belongs to the department as a group.
+        self.assertEqual(ticket.priority, Priority.UNSET)
         self.assertEqual(ticket.department, self.maintenance)
-        self.assertEqual(ticket.department_poc, self.dept_poc)
+        self.assertIsNone(ticket.department_poc)
         self.assertEqual(ticket.status, TicketStatus.PENDING_ASSIGNMENT)
-        # "created" + "auto-assigned" events are logged on the activity trail.
+        # "created" + "routed to department" events are logged on the activity trail.
         self.assertEqual(ticket.activities.count(), 2)
 
     def test_multi_floor_office_requires_at_least_one_floor(self):
@@ -96,25 +101,48 @@ class TicketWorkflowTests(BaseSetup):
             format="json", HTTP_X_ACTOR_ID=str(actor.id),
         )
 
-    def test_department_poc_can_assign_technician(self):
-        response = self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id})
+    def test_department_poc_can_assign_technician_and_set_priority(self):
+        response = self.post(
+            "assign-worker/", self.dept_poc, {"technician": self.tech.id, "priority": "HIGH"}
+        )
         self.assertEqual(response.status_code, 200)
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.technician, self.tech)
+        self.assertEqual(self.ticket.priority, Priority.HIGH)
+        self.assertEqual(self.ticket.department_poc, self.dept_poc)
         self.assertEqual(self.ticket.status, TicketStatus.PENDING_ASSESSMENT)
 
+    def test_assign_worker_requires_a_priority(self):
+        response = self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id})
+        self.assertEqual(response.status_code, 400)
+        self.ticket.refresh_from_db()
+        self.assertIsNone(self.ticket.technician)
+
+    def test_poc_from_a_different_department_cannot_act_on_this_ticket(self):
+        response = self.post(
+            "assign-worker/", self.other_dept_poc, {"technician": self.tech.id, "priority": "HIGH"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.ticket.refresh_from_db()
+        self.assertIsNone(self.ticket.technician)
+        self.assertIsNone(self.ticket.department_poc)
+
     def test_technician_from_another_department_is_rejected(self):
-        response = self.post("assign-worker/", self.dept_poc, {"technician": self.it_tech.id})
+        response = self.post(
+            "assign-worker/", self.dept_poc, {"technician": self.it_tech.id, "priority": "HIGH"}
+        )
         self.assertEqual(response.status_code, 400)
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.technician)
 
     def test_client_cannot_assign_a_worker(self):
-        response = self.post("assign-worker/", self.client_poc, {"technician": self.tech.id})
+        response = self.post(
+            "assign-worker/", self.client_poc, {"technician": self.tech.id, "priority": "HIGH"}
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_only_assigned_technician_can_submit_assessment(self):
-        self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id})
+        self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id, "priority": "HIGH"})
         rejected = self.post("assessment/", self.it_tech, {"outcome": "FULLY_RESOLVED"})
         self.assertEqual(rejected.status_code, 400)
         accepted = self.post("assessment/", self.tech, {"outcome": "FULLY_RESOLVED"})
@@ -123,7 +151,7 @@ class TicketWorkflowTests(BaseSetup):
         self.assertEqual(self.ticket.status, TicketStatus.PENDING_POC_REVIEW)
 
     def test_partial_resolution_requires_a_note(self):
-        self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id})
+        self.post("assign-worker/", self.dept_poc, {"technician": self.tech.id, "priority": "HIGH"})
         response = self.post("assessment/", self.tech, {"outcome": "PARTIALLY_RESOLVED", "note": "x"})
         self.assertEqual(response.status_code, 400)
 
